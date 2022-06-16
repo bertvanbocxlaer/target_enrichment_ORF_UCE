@@ -1,0 +1,66 @@
+
+### Select target ORFs from comparison to the BUSCO Metazoa_odb9 database
+### Do BUSCO on clustered ORFs of supertranscriptome
+
+run_busco -i All_Unionidae_95p_ORFs_95p.fa -c 20 -o BUSCO_AllUnionids_95p_ClusteredORFs_95p -l /eep/projects1/Evolink/Reference_transcriptomes/BUSCO_DB/metazoa_odb9 -m tran --limit 10
+
+## --limit indicates how many duplicated examples to maintain maximum. 
+
+### Examine the BUSCO results in detail to select complete and duplicated BUSCO hits
+### Include info of which ORF sequences are mapping to the same BUSCO region for duplicated hits
+grep "Complete" run_BUSCO_AllUnionids_95p_ClusteredORFs_95p/full_table_BUSCO_AllUnionids_95p_ClusteredORFs_95p.tsv | cut -f1,3 > Extracted_Complete_ORFs
+
+### Extract the sequences with the following scripts:
+
+#!/bin/bash
+
+infile='Extracted_Complete_ORFs'
+buscolist=$(cut -f1 < $infile | uniq)
+
+for busco in $buscolist
+do
+	grep $busco < $infile | cut -f2 > $busco'_hit.txt' 
+done
+
+#!/bin/bash
+
+list=$(ls *_hit.txt)
+
+for i in $list
+do 
+	cmd="./get_subfasta.py -f All_Unionidae_95p_ORFs_95p.fa -i $i"
+	$cmd > Unionidae_BUSCO_complete_fasta/$i'.fa'
+done
+
+### Extract the complete duplicated BUSCO hits with the following script:
+grep "Duplicated" run_BUSCO_AllUnionids_95p_ClusteredORFs_95p/full_table_BUSCO_AllUnionids_95p_ClusteredORFs_95p.tsv | cut -f1,3 > Extracted_Duplicated_ORFs
+
+#!/bin/bash
+
+infile='Extracted_Duplicated_ORFs'
+buscolist=$(cut -f1 < $infile | uniq)
+
+for busco in $buscolist
+do
+        if [[$busco == cut -f1 $infile ]]; then
+                cmd='cut -f2 $infile > $busco'_test.txt''
+        fi
+        grep '$busco' $infile | cut -f2 > $busco'_test.txt'
+        cmd="./get_subfasta.py -f All_Unionidae_95p_ORFs_95p.fa -i $busco'_test.txt' > Unionidae_BUSCO_dupl_fasta/$busco'.fa'"
+done
+
+
+### Then align BUSCO hits for manual examination of orthology
+
+#!/bin/bash
+
+module load muscle/3.5.1551
+
+falist=$(ls *.fa)
+
+for fa in $falist
+do
+    muscle -in $fa -out "MUSCLE_"$fa
+done
+
+### A similar procedure is used for the Unioverse targets of Pfeiffer et al. (2019, MPE)

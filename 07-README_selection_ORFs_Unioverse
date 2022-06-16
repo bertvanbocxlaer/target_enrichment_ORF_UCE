@@ -1,0 +1,86 @@
+### Check how Unioverse regions (Pfeiffer et al. 2019, MPE) align on all ORFs of Unionidae
+
+# Use a script to do a Yass analysis
+
+#!/bin/bash
+module load yass
+
+fastalist=$(ls Pfeiffer_regions/*.fas)
+for f in $fastalist
+do
+    fname=$(echo $f | rev | cut -d '/' -f1 | cut -d '.' -f2 | rev)
+    yass -d 2 -E 1e-10 -m 10 -s 6 $f All_Unionidae_95p_ORFs_95p.fa >  Yass_All_ORFs/$fname"_YASS_all_ORFs"
+done
+
+### run it as:
+	./do_yass_Pf_Reg_on_ORFs.sh
+
+### then try to create alignments for all these aspects to decide potentially which Pfeiffer probes to replace with complete ORFs.
+### step 1: prepare the ORF data file to delete all parts from TransDecoder that are not required for this specific step
+### step 2: create file with all Pfeiffer regions AND all ORFs from All_Unionidae_95p_ORFs_95p.fa
+### step 3: get the parsed Yass results available
+### step 4: use a bash script that creates input text files on aligned contigs from the Yass results
+### step 5: extract the contigs based on contig name with get_subfasta and write them into fasta files in separate folder
+
+
+# step 1:
+	sed 's/ /|/g' All_Unionidae_95p_ORFs_95p.fa > test.fa 
+	sed 's/|.*$//' test.fa > All_Unionidae_totalORFs.fa
+	rm test.fa
+
+# step 2: 
+	Combine the Unioverse regions with the ORFS:
+	cat All_Unionidae_totalORFs.fa Pfeiffer_Concatenated_ProbeRegions.fa > All_Unionidae_ORFs_Pfeiffer_Regions.fa
+
+# step 3:
+	cd Yass_All_ORFs
+	cat *_all_ORFs | grep -vw 'Query' > test.txt
+	head -n 100 test.txt
+	mv Yass_All_ORFs/test.txt Yass_mapping_PfeifferProbes_on_ORFs.txt
+	file Yass_mapping_PfeifferProbes_on_ORFs.txt # make sure that this file is an ascii file without hidden returns
+# note that the ORF regions are still displayed with a lot of TransDecoder information, we will filter it in step 4
+
+# step 4:
+	create a script that will allow you to create text files for each alignment
+	touch select_Yass_mapped_contigs.sh
+	chmod +x select_Yass_mapped_contigs.sh
+
+#!/bin/bash
+
+infile='Yass_mapping_PfeifferProbes_on_ORFs.txt'
+
+fastalist=$(ls Pfeiffer_regions/*.fas | cut -d '/' -f2 | cut -d '.' -f1) # get the names of the regions without fasta extension
+
+for f in $fastalist
+do
+        grep $f'_' <$infile > $f'_test.txt'
+        orf=$(cut -f2 < $f'_test.txt' | cut -d '_' -f1,2 | sort | uniq) #here the uniq is important because otherwise ClustalO will not work
+        reg=$(cut -f1 < $f'_test.txt' | sort | uniq)
+        if [ -z "$orf" ]  #double qucotes are required here becauere if $pf contains spaces, then each word is considered to be a separate argument; the double quotes keep the argument together
+        then
+                echo 'no hit on' $f
+        else
+                echo $orf | tr " " "\n"
+                echo $reg | tr " " "\n"
+                c="${orf} ${reg}"
+                echo "${c}" | tr " " "\n" | tr "\t" "\n" > $f'_hit.txt'
+        fi
+        rm $f'_test.txt'
+done
+
+    
+# step 5:
+mkdir Mapping_ProbeRegions_on_ORFs
+# loop the get_subfasta.py script
+
+#!/bin/bash
+
+list=$(ls *_hit.txt)
+
+for i in $list
+do
+        cmd="./get_subfasta.py -f All_Unionidae_ORFs_Pfeiffer_Regions.fa -i $i"
+        $cmd > Mapping_ProbeRegions_on_ORFs/$i'.fa'
+done
+
+### these fasta files can now be aligned as described elsewhere.

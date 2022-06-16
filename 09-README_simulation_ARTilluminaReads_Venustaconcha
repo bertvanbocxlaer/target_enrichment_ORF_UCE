@@ -1,0 +1,63 @@
+
+### Generate short reads for our target regions to map them onto the genome of Venustaconcha ###
+
+# The inputfile from which we want to develop the reads is Final_Unionidae_regions_II_noMito.fa
+# Examine the number of regions present:
+
+grep '>' Final_Unionidae_regions_II_noMito.fa | wc -l
+# this is the correct file
+
+# Generate reads with ART_ILLUMINA
+
+module load ART/05_06_2016
+
+art_illumina --len 100 --fcov 4 --in Final_Unionidae_regions_II_noMito.fa --out reads_test/single_end_read_4X -ir 0.0 -ir2 0.0 -dr 0.0 -dr2 0.0 -qs 100 -qs2 100 -na 
+
+# check how many reads we have simulated
+grep '@' single_end_reads_4x.fq |wc -l 
+# we have got 84484 reads in total
+
+# reference genome (not required for this script anymore): 
+# ref=~/Evolink/conserved_genomic_elements/reference_genomes/genomes/Venustaconcha_ellipsiformis_GCA_003401595.1_ASM340159v1/Venustaconcha_ellipsiformis_GCA_003401595.1_ASM340159v1.fasta
+# regions here:
+regions=~/Evolink/Reference_transcriptomes/Unionidae/All_Unionidae/Yass_Unionidae_SelectedProbes_UCEs/reads_test/single_end_read_4X.fq
+# Stampy index info can be found here:
+index=~/Evolink/Reference_transcriptomes/Unionidae/All_Unionidae/Yass_Unionidae_SelectedProbes_UCEs/map_retained_regions_to_Venustaconcha/Stampy
+# Info on how to create it in 'Creating_Venustaconcha_BED_file.txt'
+
+module load stampy
+module load samtools
+
+stampy.py --maxbasequal 93 -g $index/Venustaconcha_v1 -h $index/Venustaconcha_v1 --substitutionrate=0.05 -t 50 -M $regions | samtools view -h -F 4 -bS > ARTillumina_4x_to_Venustaconcha.bam
+
+# extract bed file
+module load bedtools
+
+bedtools bamtobed -i ARTillumina_4x_to_Venustaconcha.bam > ARTillumina_4x_to_Venustaconcha.bed
+
+# count number of lines in the bed file
+wc -l < ARTillumina_4x_to_Venustaconcha.bed
+# there are 66804 hits
+
+# how many unique hits
+cut -f4 ARTillumina_4x_to_Venustaconcha.bed | sort | uniq | wc -l
+# these are all unique hits
+
+cut -f4 ARTillumina_4x_to_Venustaconcha.bed > ART_represented_regions.txt
+cut -d '-' -f1 ART_represented_regions.txt | grep -v 'slice' | sort | uniq > ART_represented_ORF_regions.txt
+
+grep 'CompleteBUSCO' < ART_represented_ORF_regions.txt | wc -l
+# 631 of the regions are represented
+
+grep 'DuplicateBUSCO' < ART_represented_ORF_regions.txt | wc -l
+# 185 of the regions are represented
+
+grep 'Unioverse' < ART_represented_uniq_ORF.txt | wc -l
+# 295 of the regions are represented
+
+cut -d '-' -f1,2 ART_represented_regions.txt | grep 'slice' | sort | uniq > ART_represented_UCE_regions.txt
+grep 'UCE_str' < ART_represented_UCE_regions.txt | wc -l
+# 996 of these regions were recovered
+
+grep 'UCE_opt' < ART_represented_UCE_regions.txt | wc -l
+# 1824 of these regions were recovered
